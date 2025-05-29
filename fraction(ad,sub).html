@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>분수의 길 게임</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #f0f8ff;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header {
+      background-color: #4682b4;
+      color: white;
+      padding: 20px;
+      font-size: 6vw;
+    }
+    .mode-button {
+      display: block;
+      width: 60vw;
+      margin: 5vh auto;
+      padding: 3vh;
+      font-size: 5vw;
+      background-color: #fce4ec;
+      border: 2px solid #ec407a;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .mode-button:hover {
+      background-color: #f8bbd0;
+    }
+    .mode-button:active {
+      transform: scale(0.97);
+    }
+    #status, #question, #paths, #character {
+      display: none;
+    }
+    #health {
+      font-size: 4vw;
+      margin-bottom: 1vh;
+    }
+    #healthBar {
+      width: 60vw;
+      height: 3vh;
+      background-color: #ccc;
+      border-radius: 10px;
+      margin: 0 auto 3vh;
+    }
+    #healthFill {
+      height: 100%;
+      background-color: #32cd32;
+      width: 100%;
+      border-radius: 10px;
+      transition: width 0.3s, background-color 0.3s;
+    }
+    #score, #round, #timer {
+      font-size: 3.5vw;
+      margin: 1vh;
+    }
+    #paths {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2vh;
+      margin-top: 2vh;
+    }
+    .choice-button {
+      display: block;
+      width: 60vw;
+      margin: 2vh auto;
+      padding: 2vh;
+      font-size: 4vw;
+      background-color: #e0ffff;
+      border: 2px solid #00ced1;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .choice-button:hover {
+      background-color: #b2ffff;
+    }
+    .choice-button:active {
+      transform: scale(0.96);
+      background-color: #b2ebf2;
+    }
+  </style>
+</head>
+<body>
+  <header>분수의 길 게임</header>
+  <div id="mode-selection">
+    <button class="mode-button" onclick="startGame('add')">➕ 분수 덧셈 게임</button>
+    <button class="mode-button" onclick="startGame('sub')">➖ 분수 뺄셈 게임</button>
+  </div>
+
+  <div id="game">
+    <div id="status">
+      <div id="health">체력: 5</div>
+      <div id="healthBar"><div id="healthFill"></div></div>
+      <div id="round">단계: 1</div>
+      <div id="score">점수: 0</div>
+      <div id="timer">남은 시간: 30초</div>
+    </div>
+    <div id="question"></div>
+    <div id="paths"></div>
+    <div id="character">🧍‍♂️</div>
+  </div>
+
+  <script>
+    let health = 5, score = 0, round = 1, timer = 30, mode = 'add', timerInterval;
+
+    function updateHealth() {
+      document.getElementById('health').innerText = `체력: ${health}`;
+      const fill = document.getElementById('healthFill');
+      fill.style.width = (health / 5 * 100) + '%';
+      fill.style.backgroundColor = health <= 2 ? '#f44336' : (health <= 3 ? '#ffa000' : '#32cd32');
+    }
+
+    function updateStatus() {
+      document.getElementById('score').innerText = `점수: ${score}`;
+      document.getElementById('round').innerText = `단계: ${round}`;
+      document.getElementById('timer').innerText = `남은 시간: ${timer}초`;
+    }
+
+    function startTimer(correctAnswer) {
+      clearInterval(timerInterval);
+      timer = 30;
+      updateStatus();
+      timerInterval = setInterval(() => {
+        timer--;
+        updateStatus();
+        if (timer <= 0) {
+          clearInterval(timerInterval);
+          health--;
+          updateHealth();
+          if (health <= 0) {
+            document.getElementById('question').innerHTML = '시간 초과! 체력이 0이 되어 게임 종료!';
+          } else {
+            document.getElementById('question').innerHTML = '시간 초과! 체력이 1 감소합니다.';
+            assignNewQuestion();
+          }
+        }
+      }, 1000);
+    }
+
+    function fractionToDecimal(fraction) {
+      const [n, d] = fraction.split('/').map(Number);
+      return n / d;
+    }
+
+    function decimalToFraction(decimal) {
+      const tolerance = 1.0E-6;
+      let h1 = 1, h2 = 0, k1 = 0, k2 = 1;
+      let b = decimal;
+      do {
+        let a = Math.floor(b);
+        let aux = h1; h1 = a * h1 + h2; h2 = aux;
+        aux = k1; k1 = a * k1 + k2; k2 = aux;
+        b = 1 / (b - a);
+      } while (Math.abs(decimal - h1 / k1) > decimal * tolerance);
+      return `${h1}/${k1}`;
+    }
+
+    function generateRandomFraction() {
+      const denominators = [2, 3, 4, 5, 6, 10];
+      let denom, numer;
+      do {
+        denom = denominators[Math.floor(Math.random() * denominators.length)];
+        numer = Math.floor(Math.random() * denom) + 1;
+      } while (numer === denom);
+      return `${numer}/${denom}`;
+    }
+
+    function generateQuestion() {
+      let f1 = generateRandomFraction();
+      let f2 = generateRandomFraction();
+      let ansDecimal = mode === 'add'
+        ? fractionToDecimal(f1) + fractionToDecimal(f2)
+        : fractionToDecimal(f1) - fractionToDecimal(f2);
+      const correct = decimalToFraction(ansDecimal);
+      const distractors = new Set();
+      while (distractors.size < 2) {
+        const d = generateRandomFraction();
+        if (d !== correct) distractors.add(d);
+      }
+      const choices = Array.from(distractors);
+      choices.push(correct);
+      return { f1, f2, correct, choices: shuffle(choices) };
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function assignNewQuestion() {
+      const { f1, f2, correct, choices } = generateQuestion();
+      document.getElementById('question').innerText = `${f1} ${mode === 'add' ? '+' : '-'} ${f2} = ?`;
+      const paths = document.getElementById('paths');
+      paths.innerHTML = '';
+      choices.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-button';
+        btn.innerText = c;
+        btn.onclick = () => checkAnswer(c, correct);
+        paths.appendChild(btn);
+      });
+      startTimer(correct);
+    }
+
+    function checkAnswer(user, correct) {
+      clearInterval(timerInterval);
+      const q = document.getElementById('question');
+      if (user === correct) {
+        score += 10;
+        round++;
+        animateCharacter();
+        q.innerText = '정답입니다! 앞으로 나아갑니다!';
+      } else {
+        health--;
+        updateHealth();
+        q.innerText = `틀렸습니다. 정답은 ${correct}입니다.`;
+        if (health <= 0) return q.innerText = '체력이 0이 되어 게임 종료!';
+      }
+      updateStatus();
+      setTimeout(assignNewQuestion, 1500);
+    }
+
+    function animateCharacter() {
+      const c = document.getElementById('character');
+      c.style.transform = 'translateY(-20px)';
+      setTimeout(() => c.style.transform = 'translateY(0)', 500);
+    }
+
+    function startGame(selected) {
+      mode = selected;
+      document.getElementById('mode-selection').style.display = 'none';
+      ['status', 'question', 'paths', 'character'].forEach(id => document.getElementById(id).style.display = 'block');
+      updateHealth();
+      updateStatus();
+      assignNewQuestion();
+    }
+  </script>
+</body>
+</html>
